@@ -23,7 +23,7 @@ library(textstem)
 
 ## Data Import and Cleaning
 
-I am not sure if RedditExtractoR is an approach we can use for this project and based on 4) on instructions, I am assuming you do not want us using this option so I am opting to create dataset by scraping [old Reddit](https://old.reddit.com/r/IOPsychology/)
+I am not sure if RedditExtractoR is an approach we can use for this project and based on no. 4 on instructions, I am assuming you do not want us using this option so I am opting to create the data set by scraping [old Reddit](https://old.reddit.com/r/IOPsychology/)
 
 First, I downloaded 39 pages of old Reddit to reach back to 1 year of posts on IO Psychology subreddit. After downloading and reading in first page, I used a while loop to extract the next page's URL from each page. I guessed average of ~10 days of posts per page and extracted 39 pages which seemed to be the maximum possible as the 'next' button returned an empty character vector on the 40th page. The 39th page contained posts submitted one year ago so this was sufficient. Lastly, I saved the filename of each downloaded page in a vector and sorted it using `gtools::mixedsort()` so that the numbers embedded in file names are ordered correctly.
 ```{r}
@@ -45,8 +45,8 @@ First, I downloaded 39 pages of old Reddit to reach back to 1 year of posts on I
 #   Sys.sleep(2) #buffer for requesting information
 # }
 
-all_pages <- list.files(path="../data",full.names = T) #vector of all file names in ../data with relative path intact
-all_pages <- gtools::mixedsort(all_pages) #sort in order so that embedded numbers in file names are numerically ordered 
+# all_pages <- list.files(path="../data",full.names = T) #vector of all file names in ../data with relative path intact
+# all_pages <- gtools::mixedsort(all_pages) #sort in order so that embedded numbers in file names are numerically ordered 
 ```
 
 Next, I created a function that imports the html in each downloaded file and extracts the desired information into a tibble for a single provided link. I use `lapply()` to get the titles and upvotes across all pages and finally collapse each executed function output into one tibble, `week12_tbl`.
@@ -87,12 +87,7 @@ Next, I created a function that imports the html in each downloaded file and ext
 Read in scraped and saved file.
 
 ```{r}
-#first noticed some curly quotes. not sure how to handle them in pre-processing so using gsub
-#week12_tbl$title <- gsub("’", "'", week12_tbl$title, ignore.case = TRUE)
-#use str replace in content_Transformer()
-
 week12_tbl <- read_csv("../out/week12_tbl.csv")
-
 ```
 
 
@@ -112,31 +107,73 @@ completing any other beneficial pre-processing steps as appropriate to the datas
 
 ```{r}
 
-io_corpus_original[[17]]$content
+io_corpus_original[[17]]$content #IO PSYCHOLOGIST SPELLED WRONG
 io_corpus_original[[120]]$content
 io_corpus_original[[40]]$content
+io_corpus_original[[291]]$content
 
-my_stopwords <- c("io psychology","io psych","io psychologist")
+# [1] "I’m looking into applying for the masters program near me. One of the requirements is a LOR from a psychology professor. I’ve been out of school since 2017 therefore don’t have any relationship with previous professors. Does anyone have any advice? Feeling kind of stuck with that."
+# [1] "SIOP Conference - Activation Code?"
+# [1] "Pyschometric experts / IO Pyschologist, how did you switch jobs?"
+# [1] "Bi-Weekly /r/IOpsychology Discussion - What have you been reading, and what do you think of it?"
+
+my_stopwords <- c("io psychology","io psych","io psychologist"," io ","io practitioner","iopsychology",
+                  "industrial psychology","industrialorganizational psychology","riopsychology")
 custom_stopwords <- c(stopwords("en"),my_stopwords)
 
 #use str_Replace_all to replace single ’ and double ” 
 
 io_corpus <- io_corpus_original %>%
   tm_map(content_transformer(str_replace_all),pattern = "’|“|”", replacement = "'") %>% 
-#  tm_map(content_transformer(lemmatize_strings)) %>% 
-  tm_map(content_transformer(replace_abbreviation)) %>% 
-  tm_map(content_transformer(replace_contraction)) %>% #not working cuz of curly quotes inside titles, fixed
+  tm_map(content_transformer(replace_contraction)) %>%
   tm_map(removePunctuation) %>% 
+  tm_map(removeNumbers) %>%  
   tm_map(content_transformer(str_to_lower)) %>% 
-  tm_map(removeWords,custom_stopwords )
+  tm_map(removeWords, custom_stopwords) %>% 
+  tm_map(stripWhitespace) %>% 
+  tm_map(content_transformer(lemmatize_strings))
 
 
 io_corpus[[17]]$content
 io_corpus[[120]]$content
 io_corpus[[40]]$content
+io_corpus[[291]]$content
+# [1] "look apply master program near one requirement lor psychology professor school since therefore relationship previous professor anyone advice feel kind stick"
+# > io_corpus[[120]]$content
+# [1] "siop conference activation code"
+# > io_corpus[[40]]$content
+# [1] "pyschometric expert io pyschologist switch job"
+# > io_corpus[[291]]$content
+# [1] "biweekly discussion read think"
+
+
+
+
+#order- replace contraction then lemmatize strings
+# "I be look into apply for the master program near me. One of the requirement be a LOR from a psychology professor. I have be out of school since 2017 therefore do not have any relationship with previous professor. do anyone have any advice? feel kind of stick with that."
+#opposite order
+# [1] "I am look into apply for the master program near me. One of the requirement be a LOR from a psychology professor. I have be out of school since 2017 therefore do not have any relationship with previous professor. do anyone have any advice? feel kind of stick with that."
+#lemmatize only
+# [1] "I'm look into apply for the master program near me. One of the requirement be a LOR from a psychology professor. I've be out of school since 2017 therefore don't have any relationship with previous professor. do anyone have any advice? feel kind of stick with that."
+
 
 ```
 
+```{r}
+compare_them <- function(og_corp,proc_corp,random_index) {
+  
+  tibble(
+ # index_no = random_index,  
+  original_corp =  og_corp[[random_index]]$content,
+  processed_corp = proc_corp[[random_index]]$content
+  )
+}
+
+compare_them(og_corp = io_corpus_original,
+             proc_corp = io_corpus,
+             sample(1:length(io_corpus_original),1))
+
+```
 
 
 
