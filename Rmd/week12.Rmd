@@ -17,20 +17,46 @@ library(tidyverse)
 library(rvest)
 ```
 
-
-
-
 ## Data Import and Cleaning
 
 I am not sure if RedditExtractoR is an approach we can use for this project and based on 4) on instructions, I am assuming you do not want us using this option so I am opting to create dataset by scraping [old Reddit](https://old.reddit.com/r/IOPsychology/)
 
-After you have completed the download from Reddit, a) save any resulting data files somewhere appropriate, b) add code to import those files instead of downloading again, and c) comment out the original lines of code you used to download. Be sure these files are committed to GitHub.
-
+First, I downloaded 39 pages of old Reddit to reach back to 1 year of posts on IO Psychology subreddit. After downloading and reading in first page, I used a while loop to extract the next page's URL from each page. I guessed average of ~10 days of posts per page and extracted 39 pages which seemed to be the maximum possible as the 'next' button returned an empty character vector on the 40th page. The 39th page contained posts submitted one year ago so this was sufficient.
 ```{r}
-#download.file() saves local file of the data to scrape to reduce fetch requests while testing code and avoid rate limiting status code
-download.file("https://old.reddit.com/r/IOPsychology/","../data/riopsych_page1.html")
-#read_html reads in saved html file
-riopsych_html <- read_html("../data/riopsych_page39.html")
+# #get original page
+# download.file("https://old.reddit.com/r/IOPsychology/","../data/riopsych_page1.html")
+# html <- read_html("../data/riopsych_page1.html")
+# 
+# i <- 1
+# while(i < 40){
+#   next_page <- html %>%
+#     html_elements(css=".next-button") %>%  #used Developer Tools/Inspect to get attribute of next page URL
+#     html_children() %>%
+#     html_attr("href")
+# 
+#   download.file(next_page,paste0("../data/riopsych_page",i+1,".html"))
+#   html <- read_html(paste0("../data/riopsych_page",i+1,".html"))
+# 
+#   i <- i + 1
+#   Sys.sleep(2) #buffer for requesting information
+# }
+# 
+# # date_submitted <- riopsych_html %>%
+# #   html_elements(css="time.live-timestamp") %>% #//*[@id="thing_t3_147crcf"]/div[2]/div[1]/p[2]/time
+# #   html_text()
+# 
+# #STEP 2 - function to apply to each file
+# #read each html, save variables
+```
+
+
+
+Next, I created a function that imports the url in each downloaded file, reads the html source code, and extracts the desired information into a tibble for a single provided link. I use `sapply()` to get the titles and upvotes across all pages and finally collapse each executed function ouput into one tibble, `week12_tbl`.
+```{r}
+
+get_titles_upvotes <- function(file){
+  
+riopsych_html <- read_html(file)
 
 titles <- riopsych_html %>% 
   html_elements(css='.title.may-blank') %>% 
@@ -42,58 +68,20 @@ upvotes <- riopsych_html %>%
   as.numeric() %>% 
   replace_na(0)
 
-date_submitted <- riopsych_html %>% 
-  html_elements(css="time.live-timestamp") %>% #//*[@id="thing_t3_147crcf"]/div[2]/div[1]/p[2]/time
-  html_text()
 
-week12_tbl <- tibble(
-    title=titles, #do we want the body text or the titles? some posts don't have inner text, taking title for now
+tbl <- tibble(
+    title=titles, 
     upvote=upvotes
   ) 
 
-
-#scraping more pages
-# page2 <- riopsych_html %>% 
-#   html_elements(css=".next-button") %>% 
-#   html_children() %>% 
-#   html_attr("href")
-
-
-#loop up to 37 pages
-#on each page save link including original link
-#finish while loop
-
-#another loop/function
-#for each url: read html, extract title & upvotes create list
-
-#STEP 1
-#get original page
-download.file("https://old.reddit.com/r/IOPsychology/","../data/riopsych_page1.html")
-#read_html reads in saved html file
-html <- read_html("../data/riopsych_page1.html")
-
-
-i <- 1
-while(i < 41){
-  next_page <- html %>% 
-    html_elements(css=".next-button") %>% 
-    html_children() %>% 
-    html_attr("href")
+return(tbl)
   
-  download.file(next_page,paste0("../data/riopsych_page",i+1,".html"))
-  html <- read_html(paste0("../data/riopsych_page",i+1,".html"))
-  
-  i <- i + 1
-  Sys.sleep(2)
 }
-#get error if i try to go past 39 pages, i checked url and there is no 'next' button after this
-#page 39, date submitted is 1 year ago so i am good
 
-#STEP 2 - function to apply to each file
-#read each html, save variables
+all_pages <- list.files(path="../data",full.names = T) #vector of all file names in ../data with relative path intact
+all_pages <- gtools::mixedsort(all_pages) #sort in order so that embedded numbers in file names are numerically ordered 
+
+tbl_list <- sapply(all_pages, get_titles_upvotes)
+week12_tbl <- bind_rows(tbl_list)
 
 ```
-
-repeat above for enough pages to get back to 360 days ago. if one page has ~10 days of posts, need to retrieve 36 pages to get back to one year prior. taking 40 pages to be safe
-
-next page- https://old.reddit.com/r/IOPsychology/?count=25&after=t3_1402bvr
