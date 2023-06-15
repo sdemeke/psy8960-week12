@@ -18,6 +18,7 @@ library(rvest)
 library(tm)
 library(qdap)
 library(textstem)
+library(RWeka)
 ```
 
 
@@ -162,10 +163,11 @@ io_corpus[[291]]$content
 ```{r}
 compare_them <- function(og_corp,proc_corp,random_index) {
   
-  tibble(
- # index_no = random_index,  
-  original_corp =  og_corp[[random_index]]$content,
-  processed_corp = proc_corp[[random_index]]$content
+  list(
+  "Index no" = random_index,  
+  "Original Corpus Sample" =  og_corp[[random_index]]$content,
+  
+  "Cleaned Corpus Sample" = proc_corp[[random_index]]$content
   )
 }
 
@@ -175,6 +177,41 @@ compare_them(og_corp = io_corpus_original,
 
 ```
 
+Create a bigram DTM called io_dtm. Also create a version of this DTM with sparse terms eliminated called io_slim_dtm. Retain between a 2:1 and 3:1 N/k ratio in the slim DTM.
+
+```{r}
+#check empty entries
+check <- tm_index(io_corpus, FUN = function(x) { return(nchar(stripWhitespace(x$content)[[1]]) > 0) } )
+#returns TRUE for all 975 so i have no empty entries
+
+myTokenizer <- function(x) { NGramTokenizer(x, 
+Weka_control(min=1, max=2)) }
+
+io_dtm <- DocumentTermMatrix(io_corpus,
+control = list(
+tokenize = myTokenizer
+)
+)
+#  <<DocumentTermMatrix (documents: 975, terms: 3659)>>
+# Non-/sparse entries: 4067/3563458
+# Sparsity           : 100%
+# Maximal term length: 37
+# Weighting          : term frequency (tf)
+
+#if i set min=1,max=2
+# <<DocumentTermMatrix (documents: 975, terms: 5254)>>
+# Non-/sparse entries: 8805/5113845
+# Sparsity           : 100%
+# Maximal term length: 37
+# Weighting          : term frequency (tf)
+
+
+
+io_slim_dtm <- removeSparseTerms(io_dtm, .997)
+#original N:k was 975/5254
+#slimmed N:k is 975/442 or 2.2
+
+```
 
 
 
