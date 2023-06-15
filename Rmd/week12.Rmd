@@ -47,11 +47,15 @@ First, I downloaded 39 pages of old Reddit to reach back to 1 year of posts on I
 # 
 # #STEP 2 - function to apply to each file
 # #read each html, save variables
+
+all_pages <- list.files(path="../data",full.names = T) #vector of all file names in ../data with relative path intact
+all_pages <- gtools::mixedsort(all_pages) #sort in order so that embedded numbers in file names are numerically ordered 
+
 ```
 
 
 
-Next, I created a function that imports the url in each downloaded file, reads the html source code, and extracts the desired information into a tibble for a single provided link. I use `sapply()` to get the titles and upvotes across all pages and finally collapse each executed function ouput into one tibble, `week12_tbl`.
+Next, I created a function that imports the html in each downloaded file and extracts the desired information into a tibble for a single provided link. I use `lapply()` to get the titles and upvotes across all pages and finally collapse each executed function output into one tibble, `week12_tbl`.
 ```{r}
 
 get_titles_upvotes <- function(file){
@@ -78,10 +82,15 @@ return(tbl)
   
 }
 
-all_pages <- list.files(path="../data",full.names = T) #vector of all file names in ../data with relative path intact
-all_pages <- gtools::mixedsort(all_pages) #sort in order so that embedded numbers in file names are numerically ordered 
+tbl_list <- lapply(all_pages, get_titles_upvotes)
 
-tbl_list <- sapply(all_pages, get_titles_upvotes)
-week12_tbl <- bind_rows(tbl_list)
+week12_tbl <- bind_rows(tbl_list) #975 posts from June 2022 to 2023
 
 ```
+
+
+
+
+
+
+
