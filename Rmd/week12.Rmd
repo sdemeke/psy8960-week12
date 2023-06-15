@@ -259,5 +259,15 @@ view()
 
 ```
 
+Respond to the following questions in comments:
+Using the beta matrix alone, what topics would you conclude your final topic list maps onto? (e.g., topic 1, 2, 3…n each reflect what substantive topic construct? Use your best judgment.)
+Look at the original text of documents with the highest and lowest probabilities assigned to each document. Do your topic names derived from your interpretation of the beta matrix conceptually match with the content of the original posts? What kind of validity evidence does your answer to this question represent?
 
 
+Create a wordcloud of io_dtm. Remember to interpret it in a comment.
+
+
+Create a dataset called final_tbl that contains the contents of topics_tbl plus the upvote count.
+
+
+Run a statistical (not machine learning) analysis to determine if upvotes differs by topic. Explain your interpretation of the results in a comment (you do not need a Publication section this time).
