@@ -15,13 +15,17 @@ knitr::opts_chunk$set(echo = TRUE)
 setwd(dirname(rstudioapi::getActiveDocumentContext()$path))
 library(tidyverse)
 library(rvest)
+library(tm)
+library(qdap)
+library(textstem)
 ```
+
 
 ## Data Import and Cleaning
 
 I am not sure if RedditExtractoR is an approach we can use for this project and based on 4) on instructions, I am assuming you do not want us using this option so I am opting to create dataset by scraping [old Reddit](https://old.reddit.com/r/IOPsychology/)
 
-First, I downloaded 39 pages of old Reddit to reach back to 1 year of posts on IO Psychology subreddit. After downloading and reading in first page, I used a while loop to extract the next page's URL from each page. I guessed average of ~10 days of posts per page and extracted 39 pages which seemed to be the maximum possible as the 'next' button returned an empty character vector on the 40th page. The 39th page contained posts submitted one year ago so this was sufficient.
+First, I downloaded 39 pages of old Reddit to reach back to 1 year of posts on IO Psychology subreddit. After downloading and reading in first page, I used a while loop to extract the next page's URL from each page. I guessed average of ~10 days of posts per page and extracted 39 pages which seemed to be the maximum possible as the 'next' button returned an empty character vector on the 40th page. The 39th page contained posts submitted one year ago so this was sufficient. Lastly, I saved the filename of each downloaded page in a vector and sorted it using `gtools::mixedsort()` so that the numbers embedded in file names are ordered correctly.
 ```{r}
 # #get original page
 # download.file("https://old.reddit.com/r/IOPsychology/","../data/riopsych_page1.html")
@@ -40,55 +44,98 @@ First, I downloaded 39 pages of old Reddit to reach back to 1 year of posts on I
 #   i <- i + 1
 #   Sys.sleep(2) #buffer for requesting information
 # }
-# 
-# # date_submitted <- riopsych_html %>%
-# #   html_elements(css="time.live-timestamp") %>% #//*[@id="thing_t3_147crcf"]/div[2]/div[1]/p[2]/time
-# #   html_text()
-# 
-# #STEP 2 - function to apply to each file
-# #read each html, save variables
 
 all_pages <- list.files(path="../data",full.names = T) #vector of all file names in ../data with relative path intact
 all_pages <- gtools::mixedsort(all_pages) #sort in order so that embedded numbers in file names are numerically ordered 
-
 ```
-
-
 
 Next, I created a function that imports the html in each downloaded file and extracts the desired information into a tibble for a single provided link. I use `lapply()` to get the titles and upvotes across all pages and finally collapse each executed function output into one tibble, `week12_tbl`.
 ```{r}
 
-get_titles_upvotes <- function(file){
-  
-riopsych_html <- read_html(file)
+# get_titles_upvotes <- function(file){
+#   
+# riopsych_html <- read_html(file)
+# 
+# titles <- riopsych_html %>% 
+#   html_elements(css='.title.may-blank') %>% 
+#   html_text()
+# 
+# upvotes <- riopsych_html %>% 
+#   html_elements(xpath='//div[@class = "score unvoted"]') %>% #
+#   html_text() %>% 
+#   as.numeric() %>% 
+#   replace_na(0)
+# 
+# 
+# tbl <- tibble(
+#     title=titles, 
+#     upvote=upvotes
+#   ) 
+# 
+# return(tbl)
+#   
+# }
+# 
+# tbl_list <- lapply(all_pages, get_titles_upvotes)
+# 
+# tbl_df <- bind_rows(tbl_list) #975 posts from June 2022 to 2023
+# 
+# write_csv(tbl_df,"../out/week12_tbl.csv")
+```
 
-titles <- riopsych_html %>% 
-  html_elements(css='.title.may-blank') %>% 
-  html_text()
 
-upvotes <- riopsych_html %>% 
-  html_elements(xpath='//div[@class = "score unvoted"]') %>% #
-  html_text() %>% 
-  as.numeric() %>% 
-  replace_na(0)
+Read in scraped and saved file.
 
+```{r}
+#first noticed some curly quotes. not sure how to handle them in pre-processing so using gsub
+#week12_tbl$title <- gsub("’", "'", week12_tbl$title, ignore.case = TRUE)
+#use str replace in content_Transformer()
 
-tbl <- tibble(
-    title=titles, 
-    upvote=upvotes
-  ) 
-
-return(tbl)
-  
-}
-
-tbl_list <- lapply(all_pages, get_titles_upvotes)
-
-week12_tbl <- bind_rows(tbl_list) #975 posts from June 2022 to 2023
+week12_tbl <- read_csv("../out/week12_tbl.csv")
 
 ```
 
 
+Create a corpus called io_corpus_original from the titles in week12_tbl.
+
+```{r}
+io_corpus_original <- VCorpus(VectorSource(week12_tbl$title))
+
+```
+
+
+Create a new lemmatized pre-processed corpus from io_corpus_original called io_corpus by:
+removing references to IO Psychology (this is the topic of the reddit, so this isn’t useful – remember to also remove variations on this term and double-check your success in the data),
+completing any other beneficial pre-processing steps as appropriate to the dataset.
+(Be sure to explain in your comments why you chose the steps you chose and the order you chose for them.)
+
+
+```{r}
+
+io_corpus_original[[17]]$content
+io_corpus_original[[120]]$content
+io_corpus_original[[40]]$content
+
+my_stopwords <- c("io psychology","io psych","io psychologist")
+custom_stopwords <- c(stopwords("en"),my_stopwords)
+
+#use str_Replace_all to replace single ’ and double ” 
+
+io_corpus <- io_corpus_original %>%
+  tm_map(content_transformer(str_replace_all),pattern = "’|“|”", replacement = "'") %>% 
+#  tm_map(content_transformer(lemmatize_strings)) %>% 
+  tm_map(content_transformer(replace_abbreviation)) %>% 
+  tm_map(content_transformer(replace_contraction)) %>% #not working cuz of curly quotes inside titles, fixed
+  tm_map(removePunctuation) %>% 
+  tm_map(content_transformer(str_to_lower)) %>% 
+  tm_map(removeWords,custom_stopwords )
+
+
+io_corpus[[17]]$content
+io_corpus[[120]]$content
+io_corpus[[40]]$content
+
+```
 
 
 
