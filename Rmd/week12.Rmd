@@ -29,7 +29,7 @@ library(topicmodels)
 
 I am not sure if RedditExtractoR is an approach we can use for this project and based on no. 4 on instructions, I am assuming you do not want us using this option so I am opting to create the data set by scraping [old Reddit](https://old.reddit.com/r/IOPsychology/)
 
-First, I downloaded 39 pages of old Reddit to reach back to 1 year of posts on IO Psychology subreddit. After downloading and reading in first page, I used a while loop to extract the next page's URL from each page. I guessed average of ~10 days of posts per page and extracted 39 pages which seemed to be the maximum possible as the 'next' button returned an empty character vector on the 40th page. The 39th page contained posts submitted one year ago so this was sufficient. Lastly, I saved the filename of each downloaded page in a vector and sorted it using `gtools::mixedsort()` so that the numbers embedded in file names are ordered correctly.
+First, I downloaded 39 pages of old Reddit to reach back to 1 year of posts on IO Psychology subreddit. After downloading and reading in first page, I used a while loop to extract the next page's URL from each page. I guessed average of ~10 days of posts per page and extracted 39 pages which seemed to be the maximum possible as the 'next' button returned an empty character vector on the 40th page. The 39th page contained posts submitted one year ago so this was sufficient. Lastly, I saved the filename of each downloaded page in a vector and sorted it using `gtools::mixedsort()` so that the page numbers embedded in file names are ordered correctly.
 ```{r}
 # #get original page
 # download.file("https://old.reddit.com/r/IOPsychology/","../data/riopsych_page1.html")
@@ -99,7 +99,6 @@ Create a corpus called io_corpus_original from the titles in week12_tbl.
 
 ```{r}
 io_corpus_original <- VCorpus(VectorSource(week12_tbl$title))
-
 ```
 
 
@@ -123,12 +122,32 @@ io_corpus_original[[291]]$content
 
 my_stopwords <- c("io psychology","io psych","io psychologist"," io ","io practitioner","iopsychology",
                   "industrial psychology","industrialorganizational psychology","riopsychology","psych","psychology")
+
+my_stopwords <- c("io psychology","io psych","iopsychology",
+                  "industrial psychology","industrialorganizational psychology","riopsychology","iopsych")
 custom_stopwords <- c(stopwords("en"),my_stopwords)
 
-#use str_Replace_all to replace single ’ and double ” 
+#use str_Replace_all to replace single ’ and double ” curly quotes with normal single quote
+#use replace_contraction to lengthen contracted phrases
+#after lengthening contractions, remove punctuation marks and numbers
+#convert all characters to lower case
+#my custom stopwords assume the above preprocessing (e.g., no 'i/o' in my vector) so i remove all stopwords at this point
+#final step is to stem by lemmatizing the strings in the corpus
 
 io_corpus <- io_corpus_original %>%
+  # tm_map(content_transformer(str_replace_all),pattern = "’|“|”", replacement = "'") %>% 
+  # # tm_map(content_transformer(str_replace_all),pattern = "—", replacement = "-") %>% #replace long dash
+  # tm_map(content_transformer(replace_contraction)) %>%
+  # tm_map(content_transformer(replace_abbreviation)) %>%
+  # tm_map(content_transformer(str_to_lower)) %>% 
+  # tm_map(removeNumbers) %>%  
+  # tm_map(removePunctuation) %>% 
+  # tm_map(stripWhitespace) %>% 
+  # tm_map(removeWords, custom_stopwords) %>% 
+  # tm_map(content_transformer(lemmatize_words))
+
   tm_map(content_transformer(str_replace_all),pattern = "’|“|”", replacement = "'") %>% 
+  tm_map(content_transformer(replace_abbreviation)) %>% 
   tm_map(content_transformer(replace_contraction)) %>%
   tm_map(removePunctuation) %>% 
   tm_map(removeNumbers) %>%  
@@ -167,7 +186,7 @@ io_corpus[[291]]$content
 compare_them <- function(og_corp,proc_corp,random_index) {
   
   list(
-  "Index no" = random_index,  
+    random_index,
   "Original Corpus Sample" =  og_corp[[random_index]]$content,
   
   "Cleaned Corpus Sample" = proc_corp[[random_index]]$content
@@ -176,7 +195,7 @@ compare_them <- function(og_corp,proc_corp,random_index) {
 
 compare_them(og_corp = io_corpus_original,
              proc_corp = io_corpus,
-             sample(1:length(io_corpus_original),1))
+             random_index = sample(1:length(io_corpus_original),1))
 
 ```
 
@@ -184,56 +203,53 @@ Create a bigram DTM called io_dtm. Also create a version of this DTM with sparse
 
 ```{r}
 #remove empty entries
-io_corpus <- tm_filter(io_corpus, FUN = function(x) { return(nchar(stripWhitespace(x$content)[[1]]) > 0) } )
-#returns TRUE 973
+io_corpus_filt <- tm_filter(io_corpus, FUN = function(x) { return(nchar(stripWhitespace(x$content)[[1]]) > 0) } )
+#returns TRUE for all 973, 3 removed
 
 myTokenizer <- function(x) { NGramTokenizer(x, 
 Weka_control(min=1, max=2)) }
 
-io_dtm <- DocumentTermMatrix(io_corpus,
+io_dtm <- DocumentTermMatrix(io_corpus_filt,
 control = list(
 tokenize = myTokenizer
 )
 )
-# <<DocumentTermMatrix (documents: 973, terms: 5159)>>
-# Non-/sparse entries: 8608/5011099
+# <<DocumentTermMatrix (documents: 975, terms: 5610)>>
+# Non-/sparse entries: 8862/5460888
 # Sparsity           : 100%
-# Maximal term length: 37
+# Maximal term length: 33
 # Weighting          : term frequency (tf)
 
-
+io_dtm_tbl <- as_tibble(as.matrix(io_dtm))
 
 io_slim_dtm <- removeSparseTerms(io_dtm, .997)
-#original N:k was 973/5159
-#slimmed N:k is 973/438 or 2.2
+#slimmed N:k is 972/455 or 2.13
 
 ```
-LDA Topic extraction
+
+
+
+## Analysis 
+
+LDA Topic extraction with parallelization. `FindTopicsNumber()` has an argument to set parallelized processing so no need to additionally call *doParallel* package.
 
 ```{r}
-library(parallel)
-library(doParallel)
-
-local_cluster = makeCluster(detectCores() - 1)   
-registerDoParallel(local_cluster)
-
 tuning <- FindTopicsNumber( 
 io_dtm, 
-topics = seq(2,5,8,10), # or whatever range
+topics = seq(2,15,by=1), 
 metrics = c("Griffiths2004", 
 "CaoJuan2009", 
 "Arun2010", 
 "Deveaud2014"),
-verbose = T
+verbose = T,
+control = list(seed=24),
+mc.cores = 6L #use 6 cores
 )
 
 FindTopicsNumber_plot(tuning)
 
-stopCluster(local_cluster)
-registerDoSEQ()
-
 ```
-
+My interpretation from `ldatuning` results is that the Deveaud2014 and Arun2010 metrics aren't super informative. The CaoJuan2009 metric suggests 3, 6, and 8 as optimal topic numbers looking at the minima (I also tried a few different random seeds and found similar-ish results). I am  not sure how to interpret results from the Griffiths2004 metric which doesn't seem to have an idenitifiable maximum so I am choosing to continue with the optimal numbers based on the CaoJuan2009 results. Although not shown below, I tried examining beta matrices with 6 and 8 topics and did not find them interpretable so I am choosing to continue with 3 topics.
 
 
 
@@ -242,12 +258,12 @@ LDA Results
 ```{r}
 io_lda <- LDA(
   io_dtm,
-  k=5,
+  k=6,
   control = list(seed = 24)
 )
 
 lda_betas <- tidy(io_lda, matrix="beta")
-lda_gammas <- tidy(io_lda, matrix="gamma")
+
 
 #post. probs. - prob that word belongs to topic
 lda_betas %>%
@@ -255,6 +271,31 @@ group_by(topic) %>%
 top_n(10, beta) %>%
 arrange(topic, -beta) %>%
 view()
+
+lda_gammas_by_doc <- tidy(io_lda, matrix="gamma") %>%
+group_by(document) %>%
+top_n(1, gamma) %>%
+slice(1) %>%
+ungroup %>%
+mutate(document = as.numeric(document)) %>%
+arrange(document) 
+
+
+#do this better and create new week12 tbl by filtering on tm_index
+week12_title_filt <- week12_tbl$title[tm_index(io_corpus, FUN = function(x) { return(nchar(stripWhitespace(x$content)[[1]]) > 0) })] 
+
+
+
+topics_tbl <- tibble(
+  doc_id = lda_gammas_by_doc$document,
+  original = week12_title_filt,
+  topic = lda_gammas_by_doc$topic,
+  probability = lda_gammas_by_doc$gamma
+  
+)
+
+
+
 
 
 ```
@@ -264,7 +305,18 @@ Using the beta matrix alone, what topics would you conclude your final topic lis
 Look at the original text of documents with the highest and lowest probabilities assigned to each document. Do your topic names derived from your interpretation of the beta matrix conceptually match with the content of the original posts? What kind of validity evidence does your answer to this question represent?
 
 
+Create a dataset called final_tbl that contains the contents of topics_tbl plus the upvote count.
+
+```{r}
+final_tbl <- topics_tbl %>% 
+  mutate(upvotes = week12_upv_filt <- week12_tbl$upvote[tm_index(io_corpus, FUN = function(x) { return(nchar(stripWhitespace(x$content)[[1]]) > 0) })] )
+```
+
+
 ## Visualization
+
+Create a wordcloud of io_dtm. Remember to interpret it in a comment.
+
 ```{r}
 io_dtm_m <- as.matrix(io_dtm)
 
@@ -276,11 +328,11 @@ wordcloud::wordcloud(
 
 ```
 
-
-Create a wordcloud of io_dtm. Remember to interpret it in a comment.
-
-
-Create a dataset called final_tbl that contains the contents of topics_tbl plus the upvote count.
-
-
 Run a statistical (not machine learning) analysis to determine if upvotes differs by topic. Explain your interpretation of the results in a comment (you do not need a Publication section this time).
+```{r}
+summary(lm(upvotes~as.factor(topic),data=final_tbl))
+
+aov_io = aov(upvotes ~ as.factor(topic), data = final_tbl)
+summary(aov_io)
+```
+
