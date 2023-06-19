@@ -49,139 +49,81 @@ First, I downloaded 39 pages of old Reddit to reach back to 1 year of posts on I
 #   Sys.sleep(2) #buffer for requesting information
 # }
 
-# all_pages <- list.files(path="../data",full.names = T) #vector of all file names in ../data with relative path intact
-# all_pages <- gtools::mixedsort(all_pages) #sort in order so that embedded numbers in file names are numerically ordered 
+all_pages <- list.files(path="../data",full.names = T) #vector of all file names in ../data with relative path intact
+all_pages <- gtools::mixedsort(all_pages) #sort in order so that embedded numbers in file names are numerically ordered
 ```
 
-Next, I created a function that imports the html in each downloaded file and extracts the desired information into a tibble for a single provided link. I use `lapply()` to get the titles and upvotes across all pages and finally collapse each executed function output into one tibble, `week12_tbl`.
+Next, I created a function that imports the html in each downloaded file and extracts the desired information into a tibble for a single provided link. 
 ```{r}
 
-# get_titles_upvotes <- function(file){
-#   
-# riopsych_html <- read_html(file)
-# 
-# titles <- riopsych_html %>% 
-#   html_elements(css='.title.may-blank') %>% 
-#   html_text()
-# 
-# upvotes <- riopsych_html %>% 
-#   html_elements(xpath='//div[@class = "score unvoted"]') %>% #
-#   html_text() %>% 
-#   as.numeric() %>% 
-#   replace_na(0)
-# 
-# 
-# tbl <- tibble(
-#     title=titles, 
-#     upvote=upvotes
-#   ) 
-# 
-# return(tbl)
-#   
-# }
-# 
-# tbl_list <- lapply(all_pages, get_titles_upvotes)
-# 
-# tbl_df <- bind_rows(tbl_list) #975 posts from June 2022 to 2023
-# 
-# write_csv(tbl_df,"../out/week12_tbl.csv")
+get_titles_upvotes <- function(file){
+
+riopsych_html <- read_html(file)
+
+titles <- riopsych_html %>%
+  html_elements(css='.title.may-blank') %>%
+  html_text()
+
+upvotes <- riopsych_html %>%
+  html_elements(xpath='//div[@class = "score unvoted"]') %>% #
+  html_text() %>%
+  as.numeric() %>%
+  replace_na(0)
+
+
+tbl <- tibble(
+    title=titles,
+    upvote=upvotes
+  )
+
+return(tbl)
+
+}
+
 ```
 
 
-Read in scraped and saved file.
+I use `lapply()` to get the titles and upvotes across all pages and finally collapse each executed function output into one tibble, `week12_tbl`.
 
 ```{r}
-week12_tbl <- read_csv("../out/week12_tbl.csv")
+week12_tbl <- lapply(all_pages, get_titles_upvotes) %>% 
+  bind_rows()
+#975 posts from June 2022 to 2023
 ```
 
 
-Create a corpus called io_corpus_original from the titles in week12_tbl.
+Using `VectorSource()` and `VCorpus()` to create a corpus from the titles in week12_tbl.
 
 ```{r}
 io_corpus_original <- VCorpus(VectorSource(week12_tbl$title))
 ```
 
 
-Create a new lemmatized pre-processed corpus from io_corpus_original called io_corpus by:
-removing references to IO Psychology (this is the topic of the reddit, so this isn’t useful – remember to also remove variations on this term and double-check your success in the data),
-completing any other beneficial pre-processing steps as appropriate to the dataset.
-(Be sure to explain in your comments why you chose the steps you chose and the order you chose for them.)
 
+To create a new lemmatized and pre-processed corpus, I set
+To remove references to IO Psychology, I specified custom stopwords with certain variations on the term. Because I set the `removeWords()` pre-processing to occur after characters are converted to lowercase and punctuation is removed, I don't have to specify certain variations like the all caps 'IO'. Before any pre-processing on words, I first used `str_replace_all` to replace the non-R-friendly curly quotes and long dash marks with single quotes and single dashes. The following steps are to replace abbreviations and replace contractions with the full terms. I specify removing punctuation *after* replacing contractions so as not to end up with unrecognizable contractions like "Im" instead of "I'm". I then specify further steps to remove numbers, convert to lower case, and remove all set and custom stopwords. After removing stopwords, I lemmatize (done in this order so that stemming doesn't render some stopwords unrecognizable by `removeWords()`). The final step is to remove any extra spaces.
 
 ```{r}
-
-io_corpus_original[[17]]$content #IO PSYCHOLOGIST SPELLED WRONG
-io_corpus_original[[120]]$content
-io_corpus_original[[40]]$content
-io_corpus_original[[291]]$content
-
-# [1] "I’m looking into applying for the masters program near me. One of the requirements is a LOR from a psychology professor. I’ve been out of school since 2017 therefore don’t have any relationship with previous professors. Does anyone have any advice? Feeling kind of stuck with that."
-# [1] "SIOP Conference - Activation Code?"
-# [1] "Pyschometric experts / IO Pyschologist, how did you switch jobs?"
-# [1] "Bi-Weekly /r/IOpsychology Discussion - What have you been reading, and what do you think of it?"
-
-my_stopwords <- c("io psychology","io psych","io psychologist"," io ","io practitioner","iopsychology",
-                  "industrial psychology","industrialorganizational psychology","riopsychology","psych","psychology")
-
 my_stopwords <- c("io psychology","io psych","iopsychology",
-                  "industrial psychology","industrialorganizational psychology","riopsychology","iopsych")
+                  "industrial psychology","industrialorganizational psychology","riopsychology","iopsych","io psychologist","io psychologists")
 custom_stopwords <- c(stopwords("en"),my_stopwords)
 
-#use str_Replace_all to replace single ’ and double ” curly quotes with normal single quote
-#use replace_contraction to lengthen contracted phrases
-#after lengthening contractions, remove punctuation marks and numbers
-#convert all characters to lower case
-#my custom stopwords assume the above preprocessing (e.g., no 'i/o' in my vector) so i remove all stopwords at this point
-#final step is to stem by lemmatizing the strings in the corpus
-
 io_corpus <- io_corpus_original %>%
-  # tm_map(content_transformer(str_replace_all),pattern = "’|“|”", replacement = "'") %>% 
-  # # tm_map(content_transformer(str_replace_all),pattern = "—", replacement = "-") %>% #replace long dash
-  # tm_map(content_transformer(replace_contraction)) %>%
-  # tm_map(content_transformer(replace_abbreviation)) %>%
-  # tm_map(content_transformer(str_to_lower)) %>% 
-  # tm_map(removeNumbers) %>%  
-  # tm_map(removePunctuation) %>% 
-  # tm_map(stripWhitespace) %>% 
-  # tm_map(removeWords, custom_stopwords) %>% 
-  # tm_map(content_transformer(lemmatize_words))
-
   tm_map(content_transformer(str_replace_all),pattern = "’|“|”", replacement = "'") %>% 
+  tm_map(content_transformer(str_replace_all),pattern = "—", replacement = "-") %>% 
   tm_map(content_transformer(replace_abbreviation)) %>% 
   tm_map(content_transformer(replace_contraction)) %>%
   tm_map(removePunctuation) %>% 
   tm_map(removeNumbers) %>%  
   tm_map(content_transformer(str_to_lower)) %>% 
   tm_map(removeWords, custom_stopwords) %>% 
-  tm_map(stripWhitespace) %>% 
-  tm_map(content_transformer(lemmatize_strings))
-
-
-io_corpus[[17]]$content
-io_corpus[[120]]$content
-io_corpus[[40]]$content
-io_corpus[[291]]$content
-# [1] "look apply master program near one requirement lor psychology professor school since therefore relationship previous professor anyone advice feel kind stick"
-# > io_corpus[[120]]$content
-# [1] "siop conference activation code"
-# > io_corpus[[40]]$content
-# [1] "pyschometric expert io pyschologist switch job"
-# > io_corpus[[291]]$content
-# [1] "biweekly discussion read think"
-
-
-
-
-#order- replace contraction then lemmatize strings
-# "I be look into apply for the master program near me. One of the requirement be a LOR from a psychology professor. I have be out of school since 2017 therefore do not have any relationship with previous professor. do anyone have any advice? feel kind of stick with that."
-#opposite order
-# [1] "I am look into apply for the master program near me. One of the requirement be a LOR from a psychology professor. I have be out of school since 2017 therefore do not have any relationship with previous professor. do anyone have any advice? feel kind of stick with that."
-#lemmatize only
-# [1] "I'm look into apply for the master program near me. One of the requirement be a LOR from a psychology professor. I've be out of school since 2017 therefore don't have any relationship with previous professor. do anyone have any advice? feel kind of stick with that."
-
+  tm_map(content_transformer(lemmatize_strings)) %>% 
+  tm_map(stripWhitespace)
 
 ```
 
+
+To compare original and pre-processed strings, custom function `compare_them()` takes in the two corpora and a randomly sampled index and lists the corresponding item from both documents.
 ```{r}
 compare_them <- function(og_corp,proc_corp,random_index) {
   
@@ -199,12 +141,12 @@ compare_them(og_corp = io_corpus_original,
 
 ```
 
-Create a bigram DTM called io_dtm. Also create a version of this DTM with sparse terms eliminated called io_slim_dtm. Retain between a 2:1 and 3:1 N/k ratio in the slim DTM.
+Before creating a unigram/digram DTM, I first filtered out 3 empty entries using `tm_filter()`. The DTM is created from this filtered corpus. Next, I use `removeSparseTerms()` with a sparsity set to `.997`. to create `io_slim_dtm`. A 2.1:1 ratio of documents to terms is retained.
 
 ```{r}
 #remove empty entries
 io_corpus_filt <- tm_filter(io_corpus, FUN = function(x) { return(nchar(stripWhitespace(x$content)[[1]]) > 0) } )
-#returns TRUE for all 973, 3 removed
+#returns TRUE for all 972, 3 removed
 
 myTokenizer <- function(x) { NGramTokenizer(x, 
 Weka_control(min=1, max=2)) }
@@ -214,17 +156,10 @@ control = list(
 tokenize = myTokenizer
 )
 )
-# <<DocumentTermMatrix (documents: 975, terms: 5610)>>
-# Non-/sparse entries: 8862/5460888
-# Sparsity           : 100%
-# Maximal term length: 33
-# Weighting          : term frequency (tf)
 
 io_dtm_tbl <- as_tibble(as.matrix(io_dtm))
 
 io_slim_dtm <- removeSparseTerms(io_dtm, .997)
-#slimmed N:k is 972/455 or 2.13
-
 ```
 
 
@@ -242,80 +177,80 @@ metrics = c("Griffiths2004",
 "Arun2010", 
 "Deveaud2014"),
 verbose = T,
-control = list(seed=24),
+control = list(seed=2023),
 mc.cores = 6L #use 6 cores
 )
 
 FindTopicsNumber_plot(tuning)
 
 ```
-My interpretation from `ldatuning` results is that the Deveaud2014 and Arun2010 metrics aren't super informative. The CaoJuan2009 metric suggests 3, 6, and 8 as optimal topic numbers looking at the minima (I also tried a few different random seeds and found similar-ish results). I am  not sure how to interpret results from the Griffiths2004 metric which doesn't seem to have an idenitifiable maximum so I am choosing to continue with the optimal numbers based on the CaoJuan2009 results. Although not shown below, I tried examining beta matrices with 6 and 8 topics and did not find them interpretable so I am choosing to continue with 3 topics.
+My interpretation from `ldatuning` results is that the Deveaud2014 and Arun2010 metrics aren't super informative (no clearly visible minima/maxima). The CaoJuan2009 metric suggests 2 or 3 optimal topic numbers looking at the minima. I set a seed for reproducibility but caution that rerunning with different seeds may have ended up in a different decision on how many topics to extract. I am  not sure how to interpret results from the Griffiths2004 metric which doesn't seem to have an idenitifiable maximum so I am choosing to continue with the optimal numbers based on the CaoJuan2009 results. Between 2 I am opting for 3 topics because the minimum is lower based on CaoJuan.
 
 
 
-LDA Results
+I pass `io_dtm` to the `LDA()` function with number of topics set to 3. To create the specified `topics_tbl`, I extracted the document identifier, topic number, and the probability that the document belongs to that topic from the gamma matrix of the LDA object. To get the original post title, I used `tm_index()` on `io_corpus` to identify the indices of the non-empty entries I retained in `io_corpus_filt` and extracted the original titles for these entries.
 
 ```{r}
 io_lda <- LDA(
   io_dtm,
-  k=6,
-  control = list(seed = 24)
-)
-
-lda_betas <- tidy(io_lda, matrix="beta")
-
-
-#post. probs. - prob that word belongs to topic
-lda_betas %>%
-group_by(topic) %>%
-top_n(10, beta) %>%
-arrange(topic, -beta) %>%
-view()
-
-lda_gammas_by_doc <- tidy(io_lda, matrix="gamma") %>%
-group_by(document) %>%
-top_n(1, gamma) %>%
-slice(1) %>%
-ungroup %>%
-mutate(document = as.numeric(document)) %>%
-arrange(document) 
-
-
-#do this better and create new week12 tbl by filtering on tm_index
-week12_title_filt <- week12_tbl$title[tm_index(io_corpus, FUN = function(x) { return(nchar(stripWhitespace(x$content)[[1]]) > 0) })] 
-
-
-
-topics_tbl <- tibble(
-  doc_id = lda_gammas_by_doc$document,
-  original = week12_title_filt,
-  topic = lda_gammas_by_doc$topic,
-  probability = lda_gammas_by_doc$gamma
-  
+  k=5,
+  control = list(seed = 2023)
 )
 
 
+topics_tbl <- tidy(io_lda, matrix="gamma") %>% 
+  group_by(document) %>%
+  top_n(1, gamma) %>%
+  slice(1) %>%
+  ungroup %>% 
+  rename(probability=gamma) %>% 
+  mutate(doc_id = as.numeric(document),.keep="unused",.before=topic) %>% 
+  mutate(original = week12_tbl$title[tm_index(io_corpus, FUN = function(x) {    return(nchar(stripWhitespace(x$content)[[1]]) > 0) })],.before=topic ) %>% 
+  arrange(doc_id)
+
+```
 
 
-
+Beta matrix to help answer questions
+```{r}
+tidy(io_lda, matrix="beta") %>% 
+  group_by(topic) %>%
+  top_n(10, beta) %>%
+  arrange(topic, -beta) %>%  View
 ```
 
 Respond to the following questions in comments:
-Using the beta matrix alone, what topics would you conclude your final topic list maps onto? (e.g., topic 1, 2, 3…n each reflect what substantive topic construct? Use your best judgment.)
-Look at the original text of documents with the highest and lowest probabilities assigned to each document. Do your topic names derived from your interpretation of the beta matrix conceptually match with the content of the original posts? What kind of validity evidence does your answer to this question represent?
+
+**1.** Based on the beta matrix and the words with highest probabilities for each topic, I would conclude that my final topic lists map onto the following three general substantive areas: 
+
+* Topic 1 - Reading Discussions (top words: think, discussion, read)
+* Topic 2 - Job and Career Advice (top words: advice, job, career, work)
+* Topic 3 - Career Pathways (some of top words: job, interview, siop, field, consult)
+* Topic 4 - Professional Development & Learning (top words: work, people, research, book, learn)
+* Topic 5 - Student/Early Career Experiences (top words: school, internship, grad)
 
 
-Create a dataset called final_tbl that contains the contents of topics_tbl plus the upvote count.
+**2.** Looking at the original post titles with the highest and lowest probabilities assigned by topic, I think the topic names I assigned conceptually match to the original content of posts, providing some preliminary support for the content validity of the LDA results. The posts with the highest probabilities for topic 1 vary but several center around thoughts and discussions on specific readings and topics. For topic 2, the most probable posts are on questions related to jobs/careers such as salary and job board postings. For topic 3, many of the most probable posts seem to be posed by early careers/students and center around different paths in IO. The posts in topic 4 vary but many center around specific queries on timely topics and other questions related to learning development for professionals. The posts for topic 5 tend to focus on grad program questions.
+
+
+Created a dataset called final_tbl that contains the contents of topics_tbl plus the upvote count which I again extracted from the original dataset using `tm_index` and `io_corpus`.
 
 ```{r}
 final_tbl <- topics_tbl %>% 
-  mutate(upvotes = week12_upv_filt <- week12_tbl$upvote[tm_index(io_corpus, FUN = function(x) { return(nchar(stripWhitespace(x$content)[[1]]) > 0) })] )
+  mutate(upvotes = week12_tbl$upvote[tm_index(io_corpus, FUN = function(x) { return(nchar(stripWhitespace(x$content)[[1]]) > 0) })] )
 ```
+
+Finally, ran a statistical regression analysis to determine if upvotes differs by topic. Based on the results, I conclude that the number of votes does significantly differ by topic (overall F statistic is significant at p < 0.05). The coefficients suggest that topic 2, 3, and 4 have significantly more upvotes than topic 1. The coefficient for topic 5 is only marginally significant. This may suggest that the posts for topic 1 (reading discussions) get the least positive votes.
+
+```{r}
+summary(lm(upvotes~as.factor(topic),data=final_tbl))
+```
+
 
 
 ## Visualization
 
-Create a wordcloud of io_dtm. Remember to interpret it in a comment.
+The wordcloud of `io_dtm` shows the words with the highest frequencies in the provided DTM and is specified to show at most the top 25 most frequent terms. Based on the I/O subreddit DTM, the most frequent words all relate to the topics most common to I/O, including work, job, career, and research.
 
 ```{r}
 io_dtm_m <- as.matrix(io_dtm)
@@ -327,12 +262,3 @@ wordcloud::wordcloud(
 )
 
 ```
-
-Run a statistical (not machine learning) analysis to determine if upvotes differs by topic. Explain your interpretation of the results in a comment (you do not need a Publication section this time).
-```{r}
-summary(lm(upvotes~as.factor(topic),data=final_tbl))
-
-aov_io = aov(upvotes ~ as.factor(topic), data = final_tbl)
-summary(aov_io)
-```
-
