@@ -2,7 +2,11 @@
 title: "PSY8960 - Week 12"
 author: "Saron Demeke"
 date: "2023-06-14"
-output: html_document
+output: 
+  html_document:
+    df_print: paged
+knit: (function(input, ...) { 
+        rmarkdown::render(input, output_file='../out/week12.html') })
 ---
 
 ```{r setup, include=FALSE}
@@ -83,7 +87,7 @@ return(tbl)
 ```
 
 
-I use `lapply()` to get the titles and upvotes across all pages and finally collapse each executed function output into one tibble, `week12_tbl`.
+I use `lapply()` to get the titles and upvotes across all pages and collapse each executed function output into one tibble, `week12_tbl`.
 
 ```{r}
 week12_tbl <- lapply(all_pages, get_titles_upvotes) %>% 
@@ -100,8 +104,8 @@ io_corpus_original <- VCorpus(VectorSource(week12_tbl$title))
 
 
 
-To create a new lemmatized and pre-processed corpus, I set
-To remove references to IO Psychology, I specified custom stopwords with certain variations on the term. Because I set the `removeWords()` pre-processing to occur after characters are converted to lowercase and punctuation is removed, I don't have to specify certain variations like the all caps 'IO'. Before any pre-processing on words, I first used `str_replace_all` to replace the non-R-friendly curly quotes and long dash marks with single quotes and single dashes. The following steps are to replace abbreviations and replace contractions with the full terms. I specify removing punctuation *after* replacing contractions so as not to end up with unrecognizable contractions like "Im" instead of "I'm". I then specify further steps to remove numbers, convert to lower case, and remove all set and custom stopwords. After removing stopwords, I lemmatize (done in this order so that stemming doesn't render some stopwords unrecognizable by `removeWords()`). The final step is to remove any extra spaces.
+
+To remove references to IO Psychology, I specified custom stopwords with certain variations on the term. Because I set the `removeWords()` pre-processing to occur after characters are converted to lowercase and punctuation is removed, I don't have to specify certain variations like the all caps 'IO'. Before any pre-processing on words, I first used `str_replace_all` to replace the non-R-friendly curly quotes and long dash marks with single quotes and single dashes. The following steps are to replace abbreviations and replace contractions with the full terms. I specify removing punctuation *after* replacing contractions so as not to end up with unrecognizable contractions like "Im" instead of "I'm". I then specify further steps to remove numbers, convert to lower case, and remove all set and custom stopwords. After removing stopwords, I lemmatize (done in this order so that stemming doesn't render some stopwords unrecognizable by `removeWords()`). The final step is to remove  extra spaces.
 
 ```{r}
 my_stopwords <- c("io psychology","io psych","iopsychology",
@@ -141,7 +145,8 @@ compare_them(og_corp = io_corpus_original,
 
 ```
 
-Before creating a unigram/digram DTM, I first filtered out 3 empty entries using `tm_filter()`. The DTM is created from this filtered corpus. Next, I use `removeSparseTerms()` with a sparsity set to `.997`. to create `io_slim_dtm`. A 2.1:1 ratio of documents to terms is retained.
+Before creating a unigram/bigram DTM, I first filtered out 3 empty entries using `tm_filter()`. The DTM is created from this filtered corpus. Next, I use `removeSparseTerms()` with a sparsity set to `.997`. to create `io_slim_dtm`. A 2.1:1 ratio of documents to terms is retained. I
+had first tried creating a bigram-only DTM but applying `removeSparseTerms()` is not able to retain a 2-3:1 ratio so I also included unigrams.
 
 ```{r}
 #remove empty entries
@@ -177,18 +182,18 @@ metrics = c("Griffiths2004",
 "Arun2010", 
 "Deveaud2014"),
 verbose = T,
-control = list(seed=2023),
+control = list(seed = 2023),
 mc.cores = 6L #use 6 cores
 )
 
 FindTopicsNumber_plot(tuning)
 
 ```
-My interpretation from `ldatuning` results is that the Deveaud2014 and Arun2010 metrics aren't super informative (no clearly visible minima/maxima). The CaoJuan2009 metric suggests 2 or 3 optimal topic numbers looking at the minima. I set a seed for reproducibility but caution that rerunning with different seeds may have ended up in a different decision on how many topics to extract. I am  not sure how to interpret results from the Griffiths2004 metric which doesn't seem to have an idenitifiable maximum so I am choosing to continue with the optimal numbers based on the CaoJuan2009 results. Between 2 I am opting for 3 topics because the minimum is lower based on CaoJuan.
+My interpretation from `ldatuning` results is that the Deveaud2014 and Arun2010 metrics aren't super informative (no clearly visible minima/maxima). The CaoJuan2009 metric suggests 5 or 6 optimal topic numbers looking at the minima. I set a seed for reproducibility but caution that rerunning with different seeds may have ended up in a different decision on how many topics to extract. I am  not sure how to interpret results from the Griffiths2004 metric which doesn't seem to have an idenitifiable maximum so I am choosing to continue with the optimal numbers based on the CaoJuan2009 results. Between 5 and 6 I am opting for 5 topics for simplicity.
 
 
 
-I pass `io_dtm` to the `LDA()` function with number of topics set to 3. To create the specified `topics_tbl`, I extracted the document identifier, topic number, and the probability that the document belongs to that topic from the gamma matrix of the LDA object. To get the original post title, I used `tm_index()` on `io_corpus` to identify the indices of the non-empty entries I retained in `io_corpus_filt` and extracted the original titles for these entries.
+I pass `io_dtm` to the `LDA()` function with number of topics set to 5. To create the specified `topics_tbl`, I extracted the document identifier, topic number, and the probability that the document belongs to that topic from the gamma matrix of the LDA object. To get the original post title, I used `tm_index()` on `io_corpus` to identify the indices of the non-empty entries I retained in `io_corpus_filt` and extracted the original titles for these entries.
 
 ```{r}
 io_lda <- LDA(
@@ -230,7 +235,7 @@ Respond to the following questions in comments:
 * Topic 5 - Student/Early Career Experiences (top words: school, internship, grad)
 
 
-**2.** Looking at the original post titles with the highest and lowest probabilities assigned by topic, I think the topic names I assigned conceptually match to the original content of posts, providing some preliminary support for the content validity of the LDA results. The posts with the highest probabilities for topic 1 vary but several center around thoughts and discussions on specific readings and topics. For topic 2, the most probable posts are on questions related to jobs/careers such as salary and job board postings. For topic 3, many of the most probable posts seem to be posed by early careers/students and center around different paths in IO. The posts in topic 4 vary but many center around specific queries on timely topics and other questions related to learning development for professionals. The posts for topic 5 tend to focus on grad program questions.
+**2.** Looking at the original post titles with the highest and lowest probabilities assigned by topic, I think the topic names I assigned conceptually match to the original content of posts, providing some preliminary support for the *content validity* of the LDA results. The posts with the highest probabilities for topic 1 vary but several center around thoughts and discussions on specific readings and topics. For topic 2, the most probable posts are on questions related to jobs/careers such as salary and job board postings. For topic 3, many of the most probable posts seem to be posed by early careers/students and center around different paths in IO. The posts in topic 4 vary but many center around specific queries on timely topics and other questions related to learning development for professionals. The posts for topic 5 tend to focus on grad program questions.
 
 
 Created a dataset called final_tbl that contains the contents of topics_tbl plus the upvote count which I again extracted from the original dataset using `tm_index` and `io_corpus`.
@@ -240,7 +245,7 @@ final_tbl <- topics_tbl %>%
   mutate(upvotes = week12_tbl$upvote[tm_index(io_corpus, FUN = function(x) { return(nchar(stripWhitespace(x$content)[[1]]) > 0) })] )
 ```
 
-Finally, ran a statistical regression analysis to determine if upvotes differs by topic. Based on the results, I conclude that the number of votes does significantly differ by topic (overall F statistic is significant at p < 0.05). The coefficients suggest that topic 2, 3, and 4 have significantly more upvotes than topic 1. The coefficient for topic 5 is only marginally significant. This may suggest that the posts for topic 1 (reading discussions) get the least positive votes.
+Finally, ran a statistical regression analysis to determine if upvotes differs by topic. Based on the results, I conclude that the number of votes does significantly differ by topic (overall F statistic is significant at p < 0.05). The coefficients suggest that topic 2, 3, and 4 have significantly more upvotes than topic 1. The coefficient for topic 5 is only marginally significant and not at alpha < 0.05. This may suggest that the posts for topic 1 (reading discussions) get the least upvotes amongst all topics.
 
 ```{r}
 summary(lm(upvotes~as.factor(topic),data=final_tbl))
@@ -250,15 +255,22 @@ summary(lm(upvotes~as.factor(topic),data=final_tbl))
 
 ## Visualization
 
-The wordcloud of `io_dtm` shows the words with the highest frequencies in the provided DTM and is specified to show at most the top 25 most frequent terms. Based on the I/O subreddit DTM, the most frequent words all relate to the topics most common to I/O, including work, job, career, and research.
+The wordcloud of `io_dtm` shows the words with the highest frequencies in the provided DTM and is specified to show at most the top 25 most frequent terms. Based on the I/O subreddit DTM, the most frequent words all relate to the topics most common to I/O, including work, job, career, and research. It is exported in the `fig` folder in the current directory as a PNG.
 
 ```{r}
+color_pal <- viridisLite::inferno(n=6, direction = -1)
+
 io_dtm_m <- as.matrix(io_dtm)
+
+png(filename="../fig/io_wordcloud.png")
 
 wordcloud::wordcloud(
   words = colnames(io_dtm_m),
   freq = colSums(io_dtm_m),
-  max.words = 25
+  max.words = 20,
+  colors = color_pal
 )
+
+dev.off()
 
 ```
