@@ -273,4 +273,6 @@ wordcloud::wordcloud(
 
 dev.off()
 
+knitr::include_graphics("../fig/io_wordcloud.png")
+
 ```
