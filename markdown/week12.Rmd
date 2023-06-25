@@ -264,7 +264,7 @@ color_pal <- viridisLite::inferno(n=5, direction = -1)
 
 io_dtm_m <- as.matrix(io_dtm)
 
-png(filename="../fig/io_wordcloud.png", width=720, height=720,units = "px", pointsize = 16)
+png(filename="../fig/io_wordcloud.png")
 
 wordcloud::wordcloud(
   words = colnames(io_dtm_m),
