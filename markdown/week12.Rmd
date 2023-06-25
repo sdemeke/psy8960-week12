@@ -242,13 +242,15 @@ Created a dataset called final_tbl that contains the contents of topics_tbl plus
 
 ```{r}
 final_tbl <- topics_tbl %>% 
-  mutate(upvotes = week12_tbl$upvote[tm_index(io_corpus, FUN = function(x) { return(nchar(stripWhitespace(x$content)[[1]]) > 0) })] )
+  mutate(upvotes = week12_tbl$upvote[tm_index(io_corpus, FUN = function(x) { return(nchar(stripWhitespace(x$content)[[1]]) > 0) })],
+         topic = as.factor(topic)) 
 ```
 
-Finally, ran a statistical regression analysis to determine if upvotes differs by topic. Based on the results, I conclude that the number of votes does significantly differ by topic (overall F statistic is significant at p < 0.05). The coefficients suggest that topic 2, 3, and 4 have significantly more upvotes than topic 1. The coefficient for topic 5 is only marginally significant and not at alpha < 0.05. This may suggest that the posts for topic 1 (reading discussions) get the least upvotes amongst all topics.
+Finally, ran a statistical regression analysis to determine if upvotes differs by topic. Based on the results, I conclude that the number of votes does significantly differ by topic (overall F statistic is significant at p < 0.05). The coefficients suggest that topic 2, 3, and 4 have significantly more upvotes than topic 1. For a full list of all comparisons, I ran a Tukey HSD analysis as well. This showed that topics 3 are not significantly more popular than topic 2. Overall, it seems topic 1 and 5 are the least popular which suggests that posts related to regular reading discussions and student questions do not receive the most positive votes. The other three topics are more popular but there does not seem to be one that is most popular which suggests similar levels of popularity across these topics.
 
 ```{r}
-summary(lm(upvotes~as.factor(topic),data=final_tbl))
+summary(lm(upvotes~topic,data=final_tbl))
+TukeyHSD(aov(upvotes ~ topic, data = final_tbl))
 ```
 
 
