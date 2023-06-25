@@ -257,10 +257,10 @@ TukeyHSD(aov(upvotes ~ topic, data = final_tbl))
 
 ## Visualization
 
-The wordcloud of `io_dtm` shows the words with the highest frequencies in the provided DTM and is specified to show at most the top 25 most frequent terms. Based on the I/O subreddit DTM, the most frequent words all relate to the topics most common to I/O, including work, job, career, and research. It is exported in the `fig` folder in the current directory as a PNG.
+The wordcloud of `io_dtm` shows the words with the highest frequencies in the provided DTM and is specified to show at most the top 20 most frequent terms with added color scale that additionally assigns different values by frequency. Based on the I/O subreddit DTM, the most frequent words all relate to the topics most common to I/O, including work, job, career, and research. It is exported in the `fig` folder in the current directory as a PNG.
 
 ```{r}
-color_pal <- viridisLite::inferno(n=6, direction = -1)
+color_pal <- viridisLite::inferno(n=5, direction = -1)
 
 io_dtm_m <- as.matrix(io_dtm)
 
